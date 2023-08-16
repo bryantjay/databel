@@ -10,19 +10,19 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Adding the data.
 
-#### Set up work environment.
+Setting up work environment.
 
 ```{r prep, warning = FALSE, message=FALSE}
 library(caret)
 library(tidyverse)
+library(MASS)
 
 set.seed(999)
 
 setwd("C:/Users/sbrya/Documents/random_data/databel_churn")
 ```
 
-#### Set up the data
-With readr.
+Using readr to quickly read in and type the data.
 
 ```{r readr}
 databel <- read_csv(
@@ -31,7 +31,7 @@ databel <- read_csv(
 )
 ```
 
-Change field names to a more usable format for R.
+Changing field names to a more usable format for R.
 
 ``` {r names}
 databel <- databel %>%  
@@ -41,14 +41,21 @@ databel <- databel %>%
   select_all(tolower)
 ```
 
-#### Data Preview
+Data Preview
 
-```{r data_preview}
+```{r glimpse}
 glimpse(databel)
+```
+
+Data Distribution
+
+```{r summary}
 summary(databel)
 ```
 
-Changing data to more code-friendly formats.
+## Prepping the Data
+
+Changing data to more model-friendly formats.
 
 ```{r data_readability}
 databel <- databel %>%
@@ -62,46 +69,46 @@ databel <- databel %>%
           under_30 = ifelse(databel$under_30 == "Yes", 1, 0),
           senior = ifelse(databel$senior == "Yes", 1, 0),
           group = ifelse(databel$group == "Yes", 1, 0),
-          device_protection_and_online_backup = ifelse(databel$device_protection_and_online_backup == "Yes", 1, 0),
-          needs_intl_plan = ifelse(databel$intl_active == 1 & databel$intl_plan == 0, 1, 0),
-          does_not_need_intl_plan  = ifelse(databel$intl_active == 0 & databel$intl_plan == 1, 1, 0),
-          CA_resident = ifelse(state == "CA", 1, 0)
+          device_protection_and_online_backup = ifelse(databel$device_protection_and_online_backup == "Yes", 1, 0)
    )
 ```
 
-
-
-Removing unnecessary columns in preparation for modeling. Customer ID and Customer Phone number are individually distinct character fields which will slow model performance. Churn category and churn reason are also not needed, as these values are only collected from know cases of churn after they occur, and cannot be used as predictors.
+Removing unnecessary columns in preparation for modeling. Customer ID and Customer Phone number are individually distinct character fields which will slow model performance. Churn category and churn reason are also not needed, as these values are only collected from cases of known churn after they occur, and cannot be used as predictors.
 
 Labels with missing values are removed.
 
-```{r}
-db_sample <- databel %>% dplyr::select(-customer_id, -phone_number, - churn_category, -churn_reason)
-db_sample <- drop_na(db_sample)
-```
-Taking a smaller sample.
-
-```{r sampling}
-sample <- createDataPartition(y = db_sample$churn_label, p = 0.2, list = FALSE)
-db_select <- db_sample[sample, ]
-
-db_copy <- db_select
+```{r col_selection}
+db_select <- databel %>% dplyr::select(-customer_id, -phone_number, - churn_category, -churn_reason)
+db_select <- drop_na(db_select)
 ```
 
-```{r}
+Splitting the sample into train and test sets.
+
+```{r splitting}
 in_train <- createDataPartition(y = db_select$churn_label, p = 0.7, list = FALSE)
 train <- db_select[in_train, ]
 test  <- db_select[-in_train, ]
 ```
 
-```{r}
-#log model
+## Modeling the data.
 
-logistic_model <- train(churn_label ~ ., data = train, method = "glm",
+```{r model, results='hide', warning=FALSE}
+step_model <- train(churn_label ~ ., data = train, method = "glmStepAIC",
                         family = binomial, preProcess = c("center", "scale", "nzv"))
+```
 
-logistic_pred <- predict(logistic_model, newdata = test)
-summary(logistic_model)
+### Predictions
 
-confusionMatrix(logistic_pred, test$churn_label)
+Here the stepwise model reveals which of our predictors are statistically significant.
+
+```{r predictions}
+
+step_pred <- predict(step_model, newdata = test)
+summary(step_model)
+```
+
+### Confusion Matrix
+
+```{r confucion_matrix}
+confusionMatrix(step_pred, test$churn_label)
 ```
